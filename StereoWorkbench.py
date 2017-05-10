@@ -142,7 +142,6 @@ class Worker(QtCore.QThread):
 
     def getImageFilepath(self, dirPath, cam):
         if dirPath in [None, ""]:
-            print dirPath
             raise ValueError("Path cannot be empty!")
         camName = ["Left", "Right"]
         date_string = time.strftime("%Y-%m-%d_%H-%M-%S")
@@ -174,10 +173,6 @@ def main():
     parser.add_argument("devices", type=int, nargs=2, help="Device numbers "
                         "for the cameras that should be accessed in order "
                         " (left, right).")
-    parser.add_argument("--output_folder",
-                        help="Folder to write output images to.")
-    parser.add_argument("--interval", type=float, default=1,
-                        help="Interval (s) to take pictures in.")
     args = parser.parse_args()
 
     with StereoPair(args.devices) as pair:

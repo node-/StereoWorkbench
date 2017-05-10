@@ -58,6 +58,7 @@ def rotate_bound(image, angle):
     # perform the actual rotation and return the image
     return cv2.warpAffine(image, M, (nW, nH))
 
+
 class StereoPair(object):
 
     """
@@ -82,11 +83,10 @@ class StereoPair(object):
         if devices[0] != devices[1]:
             #: Video captures associated with the ``StereoPair``
             self.captures = [cv2.VideoCapture(device) for device in devices]
-
-            
             for capture in self.captures:
-                capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920.0)
-                capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080.0)
+                    capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920.0)
+                    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080.0)
+                    #capture.set(CAP_PROP_AUTOFOCUS, 0)
         else:
             # Stereo images come from a single device, as single image
             self.captures = [cv2.VideoCapture(devices[0])]
@@ -113,6 +113,7 @@ class StereoPair(object):
             frames.append(rotate_bound(capture.read()[1], orient*-90))
             #frames.append(capture.read()[1])
             #orient *= -1 # only necessary if cams are opposite orientation
+        frames = [frames[0], rotate_bound(frames[1], 180)]
         return frames
 
     def get_frames_singleimage(self):
