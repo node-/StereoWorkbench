@@ -6,3 +6,4 @@ calibration_images
 calibrate_cameras.py
 capture_chessboards.py
 svtest.py
+*.ini
