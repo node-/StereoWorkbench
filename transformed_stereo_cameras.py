@@ -72,6 +72,7 @@ class StereoPair(object):
 
     #: Window names for showing captured frame from each camera
     windows = ["{} camera".format(side) for side in ("Left", "Right")]
+    rotation = [0, 0]
 
     def __init__(self, devices):
         """
@@ -101,6 +102,9 @@ class StereoPair(object):
         for window in self.windows:
             cv2.destroyWindow(window)
 
+    def set_rotation(self, camera, rotation):
+        self.rotation[camera] = rotation
+
     def get_frames(self):
         """
         Get current frames from cameras.
@@ -109,11 +113,9 @@ class StereoPair(object):
         """
         frames = []
         orient = 1
-        for capture in self.captures:
-            frames.append(rotate_bound(capture.read()[1], orient*-90))
-            #frames.append(capture.read()[1])
-            #orient *= -1 # only necessary if cams are opposite orientation
-        frames = [frames[0], rotate_bound(frames[1], 180)]
+        for i in range(len(self.captures)):
+            capture = self.captures[i]
+            frames.append(rotate_bound(capture.read()[1], self.rotation[i]))
         return frames
 
     def get_frames_singleimage(self):

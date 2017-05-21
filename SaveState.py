@@ -38,6 +38,11 @@ def guisave(self):
             value = obj.isChecked()  # get stored value from registry
             settings.setValue(name, value)
 
+        if isinstance(obj, QSpinBox):
+            name = obj.objectName()
+            state = obj.value()
+            settings.setValue(name, state)
+
 def guirestore(self):
     settings = self.settings
     for name, obj in inspect.getmembers(self.ui):
@@ -76,3 +81,9 @@ def guirestore(self):
             value = settings.value(name)  # get stored value from registry
             if value != None:
                 obj.setChecked(strtobool(value))
+
+        if isinstance(obj, QSpinBox):
+            name = obj.objectName()
+            value = settings.value(name)
+            if value != None:
+                obj.setValue(value.toInt()[0]) # toInt returns tuple??

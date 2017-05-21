@@ -19,10 +19,10 @@ from stereovision.stereo_cameras import CalibratedPair
 class MainWindow(QtGui.QMainWindow):
     def __init__(self, pair, leftCam, rightCam, worker):
         QtGui.QMainWindow.__init__(self)
-        self. ui = uic.loadUi('workbench_ui/main.ui', self)
+        self.ui = uic.loadUi('workbench_ui/main.ui', self)
         self.setWindowTitle("Stereo Workbench")
         self.setFixedSize(self.size())
-        self.settings = QtCore.QSettings('saved.ini', QtCore.QSettings.IniFormat)
+        self.settings = QtCore.QSettings('workbench_ui/main.ini', QtCore.QSettings.IniFormat)
         guirestore(self)
         self.leftCam = leftCam
         self.rightCam = rightCam
@@ -85,6 +85,8 @@ class MainWindow(QtGui.QMainWindow):
 
     def closeEvent(self, event):
         self.worker.running = False
+        for window in self.settingsWindows:
+            window.closeEvent(event)
         guisave(self)
         event.accept()
 
@@ -92,30 +94,25 @@ class MainWindow(QtGui.QMainWindow):
 class CameraSettings(QtGui.QWidget):
     def __init__(self, pair, cam):
         QtGui.QWidget.__init__(self)
-        uic.loadUi('workbench_ui/parameters.ui', self)
+        self.ui = uic.loadUi('workbench_ui/parameters.ui', self)
         self.setWindowTitle(self.getCameraName(cam))
         self.setFixedSize(self.size())
+
         self.pair = pair
         self.cam = cam
-
         # wiring sliders and spin boxes
         self.connectObjs((self.brightnessSlider, self.brightnessSpinBox), self.setBrightness)
         self.connectObjs((self.contrastSlider, self.contrastSpinBox), self.setContrast)
         self.connectObjs((self.gainSlider, self.gainSpinBox), self.setGain)
         self.connectObjs((self.exposureSlider, self.exposureSpinBox), self.setExposure)
+        self.connectObjs((self.rotationSlider, self.rotationSpinBox), self.setRotation)
 
-        # get init values
-        self.setInitValue(self.brightnessSpinBox, cv2.CAP_PROP_BRIGHTNESS, self.setBrightness)
-        self.setInitValue(self.contrastSpinBox, cv2.CAP_PROP_CONTRAST, self.setContrast)
-        self.setInitValue(self.gainSpinBox, cv2.CAP_PROP_GAIN, self.setGain)
-        self.setInitValue(self.exposureSpinBox, cv2.CAP_PROP_EXPOSURE, self.setExposure)
+        # restore settings
+        self.settings = QtCore.QSettings('workbench_ui/parameters'+str(cam)+'.ini', QtCore.QSettings.IniFormat)
+        guirestore(self)
 
     def getCameraName(self, cam):
         return ["Left", "Right"][cam] + " Camera"
-
-    def setInitValue(self, obj, cvProperty, setFunction):
-        obj.setValue(self.pair.captures[self.cam].get(cvProperty))
-        setFunction()
 
     def connectObjs(self, objTuple, setFunction):
         first, second = objTuple
@@ -145,9 +142,17 @@ class CameraSettings(QtGui.QWidget):
         self.pair.captures[self.cam].set(cv2.CAP_PROP_EXPOSURE, self.exposureSpinBox.value()-1)
         self.changedValue()
 
+    def setRotation(self):
+        self.pair.set_rotation(self.cam, self.rotationSpinBox.value())
+        self.changedValue()
+
     def changedValue(self):
         #self.pair.show_frames(1)
         pass
+
+    def closeEvent(self, event):
+        guisave(self)
+        event.accept()
 
 
 class Worker(QtCore.QThread):
@@ -221,7 +226,7 @@ class Worker(QtCore.QThread):
         args.rows = 6
         args.columns = 9
         args.square_size = 2.38 # cm
-        args.show_chessboards = True
+        args.show_chessboards = False
         args.input_files = find_files(self.chessboardCapturePath)
         args.output_folder = self.calibrationPath
         calibrate_folder(args)
