@@ -279,7 +279,7 @@
      <string>Stereo Tools</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="captureChessboardsButton">
+   <widget class="QPushButton" name="captureChessboardButton">
     <property name="geometry">
      <rect>
       <x>40</x>
@@ -292,7 +292,7 @@
      <string>Capture</string>
     </property>
    </widget>
-   <widget class="QSpinBox" name="chessboardImageCount">
+   <widget class="QSpinBox" name="chessboardCountSpinBox">
     <property name="geometry">
      <rect>
       <x>40</x>
