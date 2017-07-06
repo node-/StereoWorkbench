@@ -28,12 +28,18 @@ class MainWindow(QtGui.QMainWindow):
         self.rightCam = rightCam
         self.pair = pair
         self.worker = worker
-        self.settingsWindows = [CameraSettings(self.pair, leftCam), CameraSettings(self.pair, rightCam)]
+
+        worker.chessboardCount = self.chessboardCountSpinBox.value()
+        worker.scale = self.viewportScaleSpinBox.value()
+        worker.interval = self.intervalSpinBox.value()
+
+        self.settingsWindows = [CameraSettings(self.pair, leftCam, isLeft=True),
+                                CameraSettings(self.pair, rightCam, isLeft=False)]
         self.setInitPaths()
 
         # Camera Settings
-        self.leftSettingsButton.clicked.connect(lambda: self.openSettings(leftCam))
-        self.rightSettingsButton.clicked.connect(lambda: self.openSettings(rightCam))
+        self.leftSettingsButton.clicked.connect(lambda: self.openSettings(isLeft=True))
+        self.rightSettingsButton.clicked.connect(lambda: self.openSettings(isLeft=False))
 
         # Viewport Scale
         self.viewportScaleSpinBox.valueChanged.connect(
@@ -42,8 +48,8 @@ class MainWindow(QtGui.QMainWindow):
             lambda: self.worker.setImagesPath(str(self.capturePath.text())))
 
         # Capture Image
-        self.leftCaptureButton.clicked.connect(lambda: self.worker.captureImage(self.leftCam))
-        self.rightCaptureButton.clicked.connect(lambda: self.worker.captureImage(self.rightCam))
+        self.leftCaptureButton.clicked.connect(lambda: self.worker.captureImage(isLeft=True))
+        self.rightCaptureButton.clicked.connect(lambda: self.worker.captureImage(isLeft=False))
         self.bothCaptureButton.clicked.connect(lambda: self.worker.captureBoth())
 
         # Interval
@@ -80,8 +86,8 @@ class MainWindow(QtGui.QMainWindow):
     def changeViewportScale(self, scale):
         self.worker.setScale(scale)
 
-    def openSettings(self, cam):
-        self.settingsWindows[cam].show()
+    def openSettings(self, isLeft):
+        self.settingsWindows[0 if isLeft else 1].show()
 
     def closeEvent(self, event):
         self.worker.running = False
@@ -92,14 +98,16 @@ class MainWindow(QtGui.QMainWindow):
 
 
 class CameraSettings(QtGui.QWidget):
-    def __init__(self, pair, cam):
+    def __init__(self, pair, cam, isLeft):
         QtGui.QWidget.__init__(self)
         self.ui = uic.loadUi('workbench_ui/parameters.ui', self)
-        self.setWindowTitle(self.getCameraName(cam))
-        self.setFixedSize(self.size())
-
         self.pair = pair
         self.cam = cam
+        self.isLeft = isLeft
+
+        self.setWindowTitle(self.getCameraName())
+        self.setFixedSize(self.size())
+
         # wiring sliders and spin boxes
         self.connectObjs((self.brightnessSlider, self.brightnessSpinBox), self.setBrightness)
         self.connectObjs((self.contrastSlider, self.contrastSpinBox), self.setContrast)
@@ -111,8 +119,11 @@ class CameraSettings(QtGui.QWidget):
         self.settings = QtCore.QSettings('workbench_ui/parameters'+str(cam)+'.ini', QtCore.QSettings.IniFormat)
         guirestore(self)
 
-    def getCameraName(self, cam):
-        return ["Left", "Right"][cam] + " Camera"
+    def getCamIndex(self):
+        return 0 if self.isLeft else 1
+
+    def getCameraName(self):
+        return ("Left" if self.isLeft else "Right") + " Camera"
 
     def connectObjs(self, objTuple, setFunction):
         first, second = objTuple
@@ -126,24 +137,24 @@ class CameraSettings(QtGui.QWidget):
         setFunction()
 
     def setBrightness(self):
-        self.pair.captures[self.cam].set(cv2.CAP_PROP_BRIGHTNESS, self.brightnessSpinBox.value())
+        self.pair.captures[self.getCamIndex()].set(cv2.CAP_PROP_BRIGHTNESS, self.brightnessSpinBox.value())
         self.changedValue()
 
     def setContrast(self):
-        self.pair.captures[self.cam].set(cv2.CAP_PROP_CONTRAST, self.contrastSpinBox.value())
+        self.pair.captures[self.getCamIndex()].set(cv2.CAP_PROP_CONTRAST, self.contrastSpinBox.value())
         self.changedValue()
 
     def setGain(self):
-        self.pair.captures[self.cam].set(cv2.CAP_PROP_GAIN, self.gainSpinBox.value())
+        self.pair.captures[self.getCamIndex()].set(cv2.CAP_PROP_GAIN, self.gainSpinBox.value())
         self.changedValue()
 
     def setExposure(self):
         # the -1 fixes weird off-by-one openCV bug
-        self.pair.captures[self.cam].set(cv2.CAP_PROP_EXPOSURE, self.exposureSpinBox.value()-1)
+        self.pair.captures[self.getCamIndex()].set(cv2.CAP_PROP_EXPOSURE, self.exposureSpinBox.value()-1)
         self.changedValue()
 
     def setRotation(self):
-        self.pair.set_rotation(self.cam, self.rotationSpinBox.value())
+        self.pair.set_rotation(self.isLeft, self.rotationSpinBox.value())
         self.changedValue()
 
     def changedValue(self):
@@ -156,15 +167,19 @@ class CameraSettings(QtGui.QWidget):
 
 
 class Worker(QtCore.QThread):
-    def __init__(self, pair):
+
+    def __init__(self, pair, scale=80, chessboardCount=30):
         QtCore.QThread.__init__(self)
+        self.scale = scale
+        self.chessboardCount = chessboardCount
         self.pair = pair
-        self.scale = 80
         self.intervalEnabled = False
         self.captureChessboards = False
         self.interval = 60
         self.running = True
-        self.chessboardCount = 30
+        self.chessboardRows = 6
+        self.chessboardColumns = 9
+        self.chessboardSize = 0.5571 #cm
 
     def run(self):
         while self.running:
@@ -194,9 +209,9 @@ class Worker(QtCore.QThread):
             if show:
                 self.show_frames()
             for i, frame in enumerate(frames):
-                # (6, 9) = (columns, rows)
                 (found_chessboard[i],
-                 corners) = cv2.findChessboardCorners(frame, (6, 9),
+                 corners) = cv2.findChessboardCorners(frame,
+                 (self.chessboardRows, self.chessboardColumns),
                  flags=cv2.CALIB_CB_FAST_CHECK)
 
         for side, frame in zip(("left", "right"), frames):
@@ -216,20 +231,21 @@ class Worker(QtCore.QThread):
         for i in [0, 1]:
             self.captureImage(i)
 
-    def captureImage(self, cam):
+    def captureImage(self, isLeft):
         images = self.pair.get_frames()
-        cv2.imwrite(self.getImageFilepath(self.imagesPath, cam), images[cam])
+        cv2.imwrite(self.getImageFilepath(self.imagesPath, cam), images[0 if isLeft else 1])
 
     def calibrate(self):
         # stereovision's silly architecture requires argparse. here's a workaround
         args = lambda: None
-        args.rows = 6
-        args.columns = 9
-        args.square_size = 2.38 # cm
+        args.rows = self.chessboardRows
+        args.columns = self.chessboardColumns
+        args.square_size = self.chessboardSize
         args.show_chessboards = False
         args.input_files = find_files(self.chessboardCapturePath)
         args.output_folder = self.calibrationPath
         calibrate_folder(args)
+        print "Calibrated!"
 
     def render(self, leftImagePath, rightImagePath, outputPath):
         image_pair = [cv2.imread(os.path.abspath(image)) for image in [leftImagePath, rightImagePath]]
@@ -248,6 +264,7 @@ class Worker(QtCore.QThread):
         points = camera_pair.get_point_cloud(rectified_pair)
         points = points.filter_infinity()
         points.write_ply(outputPath)
+        print "Rendered! output: " + outputPath
 
     def getImageFilepath(self, path, cam):
         self.verifyPathExists(path)

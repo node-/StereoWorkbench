@@ -85,9 +85,9 @@ class StereoPair(object):
             #: Video captures associated with the ``StereoPair``
             self.captures = [cv2.VideoCapture(device) for device in devices]
             #for capture in self.captures:
-            #        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920.0)
-            #        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080.0)
-                    #capture.set(CAP_PROP_AUTOFOCUS, 0)
+                    #capture.set(cv2.CAP_PROP_SETTINGS, 0)
+                    #capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920.0)
+                    #capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080.0)
         else:
             # Stereo images come from a single device, as single image
             self.captures = [cv2.VideoCapture(devices[0])]
@@ -102,8 +102,8 @@ class StereoPair(object):
         for window in self.windows:
             cv2.destroyWindow(window)
 
-    def set_rotation(self, camera, rotation):
-        self.rotation[camera] = rotation
+    def set_rotation(self, isLeft, rotation):
+        self.rotation[0 if isLeft else 1] = rotation
 
     def get_frames(self):
         """
