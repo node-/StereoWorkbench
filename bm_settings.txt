@@ -1,0 +1,1 @@
+{"P2": 1080, "numDisparities": 176, "P1": 216, "speckleRange": 32, "fullDP": true, "uniquenessRatio": 15, "minDisparity": 16, "SADWindowSize": 3, "speckleWindowSize": 132, "disp12MaxDiff": 642}

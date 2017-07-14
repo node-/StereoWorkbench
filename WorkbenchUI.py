@@ -8,10 +8,11 @@ author: Jacob Kosberg
 import os
 import time
 import cv2
+import operator
 
 from SaveState import guisave, guirestore
 from PyQt4 import QtGui, QtCore, uic
-from stereovision.ui_utils import find_files, calibrate_folder
+from stereovision.ui_utils import find_files, get_calibrator
 from stereovision.blockmatchers import StereoBM, StereoSGBM
 from stereovision.calibration import StereoCalibration
 from stereovision.stereo_cameras import CalibratedPair
@@ -69,7 +70,7 @@ class MainWindow(QtGui.QMainWindow):
             lambda: self.worker.setCalibrationPath(str(self.calibrationPath.text())))
         
         self.captureChessboardButton.clicked.connect(lambda: self.worker.setCaptureChessboards(True))
-        self.calibrateButton.clicked.connect(lambda: self.worker.calibrate())
+        self.calibrateButton.clicked.connect(lambda: self.worker.optimizeCalibration())
 
         # Rendering
         self.renderButton.clicked.connect(lambda: self.worker.render(
@@ -219,7 +220,7 @@ class Worker(QtCore.QThread):
             filename = "{}_{}.png".format(side, number_string)
             filepath = os.path.join(self.chessboardCapturePath, filename)
             cv2.imwrite(filepath, frame)
-        
+
     def verifyPathExists(self, path):
         if path in [None, ""]:
             raise ValueError("Path cannot be empty!")
@@ -233,29 +234,65 @@ class Worker(QtCore.QThread):
 
     def captureImage(self, isLeft):
         images = self.pair.get_frames()
-        cv2.imwrite(self.getImageFilepath(self.imagesPath, cam), images[0 if isLeft else 1])
+        cam = 0 if isLeft else 1
+        cv2.imwrite(self.getImageFilepath(self.imagesPath, cam), images[cam])
 
-    def calibrate(self):
-        # stereovision's silly architecture requires argparse. here's a workaround
-        args = lambda: None
-        args.rows = self.chessboardRows
-        args.columns = self.chessboardColumns
-        args.square_size = self.chessboardSize
-        args.show_chessboards = False
-        args.input_files = find_files(self.chessboardCapturePath)
-        args.output_folder = self.calibrationPath
-        calibrate_folder(args)
-        print "Calibrated!"
+
+    def optimizeCalibration(self):
+        input_files_list = find_files(self.chessboardCapturePath)
+        input_files = zip(input_files_list, input_files_list[1:])[::2]
+        calibrator = get_calibrator(list(input_files),
+            self.chessboardRows,
+            self.chessboardColumns, 
+            self.chessboardSize)
+        print("Calibrating cameras. This can take a while.")
+
+        i = 1
+        removed = []
+        avg_errors = {}
+        while True:
+            calibrator, sorted_errors, avg_error = self.calibrate(input_files, calibrator)
+            highest_error = sorted_errors[0]
+            calibrator.remove_images([highest_error[0]])
+            removed.append(highest_error[0])
+            avg_errors[i] = avg_error
+            if highest_error[1] < 1 or calibrator.image_count <= 10:
+                break
+            i += 1
+        print "Calibration optimization completed with " + str(i) + " iterations."
+        self.showError(input_files, sorted_errors)
+        print avg_errors
+
+    def calibrate(self, input_files, calibrator, showErrors=False):
+        calibration = calibrator.calibrate_cameras()
+        calibration.export(self.calibrationPath)
+
+        avg_error = calibrator.check_calibration(calibration)
+        print("Avg error: " + str(avg_error) + " pixels.")
+
+        sorted_errors = sorted(calibrator.error_data.items(),
+            reverse=True, key=operator.itemgetter(1))
+
+        if showErrors:
+            self.showError(input_files, sorted_errors)
+
+        return calibrator, sorted_errors, avg_error
+
+    def showError(self, input_files, sorted_errors):
+            print "Image Pair\t\t\tError:"
+            for i,error in sorted_errors:
+                input_names = (os.path.basename(input_files[i][0]), os.path.basename(input_files[i][1]))
+                print input_names,"\t\t\t",error
 
     def render(self, leftImagePath, rightImagePath, outputPath):
         image_pair = [cv2.imread(os.path.abspath(image)) for image in [leftImagePath, rightImagePath]]
         use_stereobm = False
         if use_stereobm:
             block_matcher = StereoBM()
-            blockmatcher.load_settings(args.bm_settings)
         else:
             block_matcher = StereoSGBM()
 
+        block_matcher.load_settings("bm_settings.txt")
         camera_pair = CalibratedPair(None,
                                     StereoCalibration(input_folder=self.calibrationPath),
                                     block_matcher)
